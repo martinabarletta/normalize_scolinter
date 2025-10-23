@@ -3,6 +3,12 @@
 Created on Tue Oct 21 21:26:34 2025
 
 @author: matil
+
+code pour la création du dataset à utiliser pour finetuning/LoRA
+input - csv d'export de la plateforme Scolinter, contient input (transcriptions) et output(normalisations)
+output - json train, validation et test
+
+le dataset en entrée contient environ 1500 lignes, les textes sont en italien (dont l'encodage utilisé)
 """
 
 import pandas as pd
@@ -12,40 +18,37 @@ from sklearn.model_selection import train_test_split
 
 df = pd.read_csv("./scolinter_italien_fev_2025.csv", encoding="ISO-8859-1", sep=";")  # replace with your actual filename
 
-#check col names, must contain "transcription" and "normalisation"
-print(df.columns)
+#delete empty lines
+df = df.dropna(subset=["transcription", "normalisation"])
+df = df[df["transcription"].str.strip() != ""]
+df = df[df["normalisation"].str.strip() != ""]
 
-#Supprimer les lignes où 'transcription' est NaN ou vide
-df = df.dropna(subset=["transcription"])  # supprime les NaN
-df = df[df["transcription"].str.strip() != ""]  # supprime les lignes vides
-#<empty/>
-df = df[df["transcription"].str.strip() != "<empty/>"]  # supprime les lignes vides
-df = df[df["normalisation"].str.strip() != ""]  # supprime les lignes vides
+#remove copies
+df = df.drop_duplicates(subset=["transcription", "normalisation"])
 
+#remove input == output
+df = df[df["transcription"].str.lower().str.strip() != df["normalisation"].str.lower().str.strip()]
 
-# Make sure they match exactly: 'transcription' and 'normalisation'
-assert "transcription" in df.columns and "normalisation" in df.columns, \
-    "The CSV must have 'transcription' and 'normalisation' columns."
+print(f"{len(df)} texts in dataset")
 
-#Diviser le dataset en train / validation (90 / 10)
-train_df, val_df = train_test_split(df, test_size=0.1, random_state=42)
+# 5️⃣ Divisione train / val / test
+train_df, temp_df = train_test_split(df, test_size=0.2, random_state=42)
+val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42)
 
-#Fonction d’écriture en JSONL UTF-8
+# 6️⃣ Funzione di scrittura in JSONL con formattazione tipo "prompt + completion"
 def write_jsonl(dataframe, filename):
     with open(filename, "w", encoding="utf-8") as f:
         for _, row in dataframe.iterrows():
-            ex = {
-                "input": str(row["transcription"]).strip(),
-                "output": str(row["normalisation"]).strip(),
+            example = {
+                "input": f"{row['transcription'].strip()}",
+                "output": row["normalisation"].strip(),
             }
-            json.dump(ex, f, ensure_ascii=False)
+            json.dump(example, f, ensure_ascii=False)
             f.write("\n")
 
-#Écrire les deux fichiers
 os.makedirs("data", exist_ok=True)
 write_jsonl(train_df, "data/train.jsonl")
 write_jsonl(val_df, "data/validation.jsonl")
+write_jsonl(test_df, "data/test.jsonl")
 
-print("Fichiers créés avec succès :")
-print(" - data/train.jsonl")
-print(" - data/validation.jsonl")
+print("dataset ready!")
