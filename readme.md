@@ -1,0 +1,5 @@
+📊 RISULTATI METRICHE VALIDATION SET:
+ROUGE-L F1: 0.6843
+SacreBLEU: 25.8937
+BLEU (nltk corpus-level): 0.2643
+Exact Match: 0.67%
